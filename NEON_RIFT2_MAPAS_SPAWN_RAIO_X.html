@@ -264,7 +264,7 @@ const au=()=>{try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();i
 function snd(f,d,t='square',v=.1,s=.5){if(!AC||S.cfg.audioOn===false)return;try{const o=AC.createOscillator(),g=AC.createGain(),n=AC.currentTime;o.type=t;o.frequency.setValueAtTime(f,n);o.frequency.exponentialRampToValueAtTime(Math.max(20,f*s),n+d);g.gain.setValueAtTime(v*S.cfg.sfxVol,n);g.gain.exponentialRampToValueAtTime(.001,n+d);o.connect(g);g.connect(AC.destination);o.start();o.stop(n+d)}catch(e){}}
 const MUSIC_TRACKS=[
   'audio/trilha-01.mp3','audio/trilha-02.mp3','audio/trilha-03.mp3',
-  'audio/trilha-04.mp3','audio/trilha-05.mp3','audio/trilha-06.mp3', 'audio/trilha-07.mp3', 'audio/trilha-08.mp3', 'audio/trilha-09.mp3', 'audio/trilha-10.mp3', 'audio/trilha-11.mp3', 'audio/trilha-12.mp3', 'audio/trilha-13.mp3',  'audio/trilha-15.mp3', 'audio/trilha-16.mp3', 'audio/trilha-17.mp3', 'audio/trilha-18.mp3', 'audio/trilha-19.mp3', 'audio/trilha-20.mp3', 'audio/trilha-21.mp3', 'audio/trilha-22.mp3', 'audio/trilha-23.mp3', 'audio/trilha-24.mp3', 'audio/trilha-25.mp3', 'audio/trilha-26.mp3', 'audio/trilha-27.mp3', 'audio/trilha-28.mp3', 'audio/trilha-29.mp3', 'audio/trilha-30.mp3', 'audio/trilha-31.mp3', 'audio/trilha-32.mp3',  'audio/trilha-34.mp3',  'audio/trilha-36.mp3', 'audio/trilha-37.mp3', 'audio/trilha-38.mp3', 'audio/trilha-39.mp3', 'audio/trilha-40.mp3'
+  'audio/trilha-04.mp3','audio/trilha-05.mp3','audio/trilha-06.mp3', 'audio/trilha-07.mp3', 'audio/trilha-08.mp3', 'audio/trilha-09.mp3', 'audio/trilha-10.mp3', 'audio/trilha-11.mp3', 'audio/trilha-12.mp3', 'audio/trilha-13.mp3',  'audio/trilha-15.mp3', 'audio/trilha-16.mp3', 'audio/trilha-17.mp3', 'audio/trilha-18.mp3', 'audio/trilha-19.mp3'
 ];
 const Music={
   player:new Audio(), order:[],last:-1,index:-1,ready:false,unlocked:false,failed:0,
@@ -1009,6 +1009,7 @@ document.addEventListener('focusin',e=>{
 
 /* ===== SISTEMA COMPLETO DE CONTROLE (GAMEPAD API) ===== */
 const gpState={moveX:0,moveZ:0,lookX:0,lookY:0,fireHeld:false,jumpHeld:false,slideHeld:false,dashHeld:false};
+let xrayEnabled=false;
 
 const GP={
   connected:false,
@@ -1298,7 +1299,7 @@ const GP={
 
     if(!gp){
       Object.assign(gpState,{moveX:0,moveZ:0,lookX:0,lookY:0,fireHeld:false,jumpHeld:false,slideHeld:false,dashHeld:false});
-      this.prev={};this.prevNav={};
+      this.prev={};this.prevNav={};this.xrayPrevL=false;this.xrayPrevR=false;
       if(currentMenu==='gp')this.updateTesterUI(null,{});
       return;
     }
@@ -1347,6 +1348,17 @@ const GP={
     if(currentMenu==='gp')this.updateTesterUI(gp,vals);
 
     if(state==='play'){
+      // L3/R3 (botões padrão 10/11) são lidos separadamente do mapeador,
+      // sem consumir ou modificar os comandos originais do controle.
+      const l3=!!(gp.buttons[10]&&(gp.buttons[10].pressed||gp.buttons[10].value>.5));
+      const r3=!!(gp.buttons[11]&&(gp.buttons[11].pressed||gp.buttons[11].value>.5));
+      if((l3&&!this.xrayPrevL)||(r3&&!this.xrayPrevR)){
+        xrayEnabled=!xrayEnabled;
+        E.forEach(e=>{if(e.xray)e.xray.visible=xrayEnabled;});
+        GP.toast(xrayEnabled?'VISÃO DE RAIO X ATIVADA':'VISÃO DE RAIO X DESATIVADA',false);
+        snd(xrayEnabled?820:360,.09,'sine',.06,1.4);
+      }
+      this.xrayPrevL=l3;this.xrayPrevR=r3;
       if(jp.jump)K.jp=1;
       if(jp.slide)K.cp=1;
       if(jp.dash)K.dash=1;
@@ -1427,6 +1439,9 @@ function build(i){
   const dl=new T.DirectionalLight(0xffffff,.9);dl.position.set(40,90,30);dl.userData.baseIntensity=.9;dl.castShadow=S.cfg.q>0;const sh=dl.shadow;sh.mapSize.set(S.cfg.q>1?2048:1024,S.cfg.q>1?2048:1024);Object.assign(sh.camera,{left:-75,right:75,top:75,bottom:-75,far:220});world.add(dl);
   for(let k=0;k<3;k++){const pl=new T.PointLight(L.c,1.4,70);pl.userData.baseIntensity=1.4;pl.position.set((rn()-.5)*90,10+rn()*10,(rn()-.5)*90);world.add(pl)}
   box(0,0,62,128,40,4,bm);box(0,0,-62,128,40,4,bm);box(62,0,0,4,40,128,bm);box(-62,0,0,4,40,128,bm);if(L.ceil)box(0,28,0,128,2,128,bm);
+  // Teto invisível: somente colisão, sem mesh/material, preservando câmera e iluminação.
+  // Fica alinhado às quatro paredes e impede fuga por pulos, dash ou gancho.
+  B.push({x0:-62,x1:62,y0:36,y1:38,z0:-62,z1:62});
   const a=rn()*6.28,tx=Math.cos(a)*42,tz=Math.sin(a)*42;box(tx,0,tz,5,16,5,bm);
   for(let k=1;k<=4;k++){const b=a+k*1.2;box(tx+Math.cos(b)*9,3.4*k-1,tz+Math.sin(b)*9,5,1,5,bm)}
   for(let k=0;k<L.k;k++){const w=4+rn()*8,d=4+rn()*8,h=L.h0+rn()*(L.h1-L.h0),x=(rn()-.5)*94,z=(rn()-.5)*94;if(H(x,z)<12||H(x-tx,z-tz)<16)continue;box(x,0,z,w,h,d,bm)}
@@ -1607,10 +1622,58 @@ function pointHitsPlayerCapsule(point,radius){
   const dist=Math.hypot(dx,dz,dy);
   return {hit:dist<=radius+playerRadius,distance:dist,closest:V(P.p.x,closestY,P.p.z)};
 }
-function sp(t,x,z){if(!T||!sc)return;const d=ET[t],df=diffScale();if(x==null)for(let i=0;i<50;i++){x=(R()-.5)*100;z=(R()-.5)*100;if(H(x,z)>25&&!coll(x,0,z,3,1.5))break}
-const g=new T.Group(),m=new T.MeshStandardMaterial({color:d.col,emissive:d.col,emissiveIntensity:.5,roughness:.4}),b=new T.Mesh(new T.BoxGeometry(...d.s),m);b.position.y=d.s[1]/2;b.castShadow=true;g.add(b);
-const hd=new T.Mesh(new T.BoxGeometry(d.s[0]*.6,d.s[0]*.5,d.s[0]*.6),new T.MeshBasicMaterial({color:0xffffff}));hd.position.set(0,d.s[1]+d.s[0]*.25,d.s[0]*.3);g.add(hd);
-g.position.set(x,d.air?8+R()*6:0,z);sc.add(g);const maxHp=d.hp*(1+.06*lv)*df;E.push({t,d,g,m,p:g.position,hp:maxHp,max:maxHp,tm:1+R()*2,ang:R()*6.28,los:0,lt:0,fl:0,sd:1,bk:0,cv:null,cvt:0,n:0,ph:0})}
+function enemySpawnPosition(d,preferredX=null,preferredZ=null){
+  const radius=Math.max(.45,d.s[0]*.52),height=d.s[1]+d.s[0]*.5;
+  const air=!!d.air;
+  const valid=(x,z,y)=>{
+    if(!Number.isFinite(x)||!Number.isFinite(z)||Math.abs(x)>56.5||Math.abs(z)>56.5)return false;
+    if(coll(x,y,z,height,radius))return false;
+    // Evita sobreposição imediata com inimigos já ativos.
+    for(const e of E){
+      const minGap=radius+Math.max(.45,e.d.s[0]*.52)+.35;
+      if(Math.hypot(x-e.p.x,z-e.p.z)<minGap&&Math.abs(y-e.p.y)<Math.max(height,e.d.s[1]+1))return false;
+    }
+    return true;
+  };
+  for(let i=0;i<140;i++){
+    let x,z;
+    if(i===0&&preferredX!=null&&preferredZ!=null){x=preferredX;z=preferredZ;}
+    else if(preferredX!=null&&preferredZ!=null&&i<45){const a=R()*Math.PI*2,r=3+R()*Math.min(18,i*.45+4);x=preferredX+Math.cos(a)*r;z=preferredZ+Math.sin(a)*r;}
+    else{x=(R()-.5)*108;z=(R()-.5)*108;}
+    const y=air?8+R()*6:0;
+    if(Math.hypot(x,z)<(preferredX==null?22:3))continue;
+    if(valid(x,z,y))return{x,z,y};
+  }
+  // Última busca em uma grade regular: não cria inimigo em posição inválida.
+  for(let radiusStep=0;radiusStep<7;radiusStep++){
+    for(let ix=-5;ix<=5;ix++)for(let iz=-5;iz<=5;iz++){
+      const x=ix*9+radiusStep*.7,z=iz*9-radiusStep*.7,y=air?10:0;
+      if(Math.hypot(x,z)<18)continue;
+      if(valid(x,z,y))return{x,z,y};
+    }
+  }
+  return null;
+}
+function sp(t,x,z){
+  if(!T||!sc||!ET[t])return false;
+  const d=ET[t],df=diffScale(),spawn=enemySpawnPosition(d,x,z);
+  if(!spawn)return false;
+  const g=new T.Group(),m=new T.MeshStandardMaterial({color:d.col,emissive:d.col,emissiveIntensity:.5,roughness:.4}),bodyGeo=new T.BoxGeometry(...d.s),b=new T.Mesh(bodyGeo,m);
+  b.position.y=d.s[1]/2;b.castShadow=true;g.add(b);
+  const headGeo=new T.BoxGeometry(d.s[0]*.6,d.s[0]*.5,d.s[0]*.6);
+  const hd=new T.Mesh(headGeo,new T.MeshBasicMaterial({color:0xffffff}));hd.position.set(0,d.s[1]+d.s[0]*.25,d.s[0]*.3);g.add(hd);
+  // Contornos sem teste de profundidade: aparecem por trás de qualquer estrutura.
+  const xray=new T.Group();
+  const edgeMat=new T.LineBasicMaterial({color:0x35f6ff,transparent:true,opacity:.98,depthTest:false,depthWrite:false});
+  const bodyEdges=new T.LineSegments(new T.EdgesGeometry(bodyGeo),edgeMat);
+  bodyEdges.position.copy(b.position);bodyEdges.renderOrder=1001;xray.add(bodyEdges);
+  const headEdges=new T.LineSegments(new T.EdgesGeometry(headGeo),edgeMat.clone());
+  headEdges.position.copy(hd.position);headEdges.renderOrder=1001;xray.add(headEdges);
+  xray.visible=xrayEnabled;g.add(xray);g.position.set(spawn.x,spawn.y,spawn.z);sc.add(g);
+  const maxHp=d.hp*(1+.06*lv)*df;
+  E.push({t,d,g,m,p:g.position,xray,hp:maxHp,max:maxHp,tm:1+R()*2,ang:R()*6.28,los:0,lt:0,fl:0,sd:1,bk:0,cv:null,cvt:0,n:0,ph:0});
+  return true;
+}
 function eshoot(e){const d=e.d,c=ec(e),dir=V(P.p.x,P.p.y+1.2,P.p.z).sub(c).normalize(),Y=V(0,1,0);snd(200+R()*100,.1,'square',.05,.5);if(e.t=='snp')e.m.emissiveIntensity=.5;
 const sh=(v,s=d.ps)=>proj(c.clone().addScaledVector(v,(e.t=='boss'||e.t=='warden')?3:1.4),v,s,d.dmg*diffProfile().damage,'e',d.col,'',(e.t=='boss'||e.t=='warden')?.45:e.t=='hvy'?.4:.2);
 if(e.t=='boss'||e.t=='warden'){const ph=e.hp<e.max*.33?2:e.hp<e.max*.66?1:0;e.ph=ph;e.n++;for(let i=-1;i<=1;i++)sh(dir.clone().applyAxisAngle(Y,i*.16));
@@ -1758,7 +1821,7 @@ function startLevel(i,viaGamepad=false,networkStart=false){
   if(i>S.done&&!networkStart){GP.toast('Conclua a fase anterior para desbloquear esta.',true);return}
   if(!T||!rd){GP.toast('Motor 3D (Three.js/WebGL) indisponível neste navegador.',true);return}
   try{
-    lv=i;build(i);clear();spawnHealthBoxes();spawnAmmoBoxes();P.p.set(0,0,0);P.v.set(0,0,0);Object.assign(P,{gr:1,jc:0,sl:0,wr:0,dT:0,gp:null,rs:0,dm:3,cd:1.4-.15*S.up[2],dc:3,dr:0});yaw=pit=0;resetInputs();
+    lv=i;build(i);clear();xrayEnabled=false;GP.xrayPrevL=false;GP.xrayPrevR=false;spawnHealthBoxes();spawnAmmoBoxes();P.p.set(0,0,0);P.v.set(0,0,0);Object.assign(P,{gr:1,jc:0,sl:0,wr:0,dT:0,gp:null,rs:0,dm:3,cd:1.4-.15*S.up[2],dc:3,dr:0});yaw=pit=0;resetInputs();
     mhp=100+20*S.up[0];hp=mhp;score=0;cm=1;ct=0;kills=0;tm=0;portalOn=false;tgt=0;W.forEach(w=>{w.ammo=w.mag;w.res=w.mag*5;w.rt=0});setW(0);
     ['sol','run','hvy','snp','fly'].forEach((t,k)=>{for(let j=0;j<scaledEnemyCount(L.en[k]);j++)sp(t)});if(lv>=6){for(let j=0;j<Math.min(2+lv-6,5);j++)sp('med');for(let j=0;j<Math.min(2+lv-6,5);j++)sp('boom');}if(lv>=8){for(let j=0;j<Math.min(lv-6,5);j++)sp('cloak');for(let j=0;j<Math.min(lv-7,4);j++)sp('elite');}if(L.boss)sp(lv>=10?'warden':'boss',0,-35);nE=E.length;
     au();
